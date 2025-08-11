@@ -219,18 +219,8 @@ namespace FileContentRenamer.Models
                     }
                     else
                     {
-                        // As a last resort, try the direct path to the known location
-                        string directPath = Path.Combine("/Users/santibraida/Workspace/comprobantes", "appsettings.json");
-                        if (File.Exists(directPath))
-                        {
-                            configPath = directPath;
-                            Log.Information("Found appsettings.json at hardcoded path: {Path}", directPath);
-                        }
-                        else
-                        {
-                            Log.Error("Could not find appsettings.json even at the known location. Cannot save LastUsedPath.");
-                            return;
-                        }
+                        Log.Error("Could not find appsettings.json in expected locations. Cannot save LastUsedPath.");
+                        return;
                     }
                 }
                 

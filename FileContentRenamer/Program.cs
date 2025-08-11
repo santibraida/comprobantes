@@ -173,27 +173,29 @@ namespace FileContentRenamer
             var configBuilder = new ConfigurationBuilder()
                 .SetBasePath(solutionDir)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
-            
+
             IConfiguration configuration = configBuilder.Build();
-            
-            // Configure Serilog with explicit paths
-            Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+
+            // Configure Serilog using appsettings.json, with sensible defaults if missing
+            var loggerConfig = new LoggerConfiguration()
+                .ReadFrom.Configuration(configuration)
                 .Enrich.FromLogContext()
                 .Enrich.WithProperty("Application", "FileContentRenamer")
                 .Enrich.WithProperty("Version", "1.0.0")
                 .Enrich.WithProperty("MachineName", Environment.MachineName)
-                .Enrich.WithProperty("UserName", Environment.UserName)
-                .WriteTo.Console(
-                    outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
-                .WriteTo.File(
-                    Path.Combine(logsPath, "app.log"),
-                    rollingInterval: RollingInterval.Day,
-                    shared: true,
-                    fileSizeLimitBytes: null,
-                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{Application}/{MachineName}/{UserName}] {Message:lj}{NewLine}{Exception}")
-                .CreateLogger();
+                .Enrich.WithProperty("UserName", Environment.UserName);
+
+            // If file sink path isn't configured, ensure logs go to solution logs folder
+            var logFilePath = Path.Combine(logsPath, "app.log");
+            if (!File.Exists(Path.Combine(solutionDir, "appsettings.json")))
+            {
+                loggerConfig = loggerConfig
+                    .MinimumLevel.Is(LogEventLevel.Information)
+                    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+                    .WriteTo.File(logFilePath, rollingInterval: RollingInterval.Day, shared: true);
+            }
+
+            Log.Logger = loggerConfig.CreateLogger();
         }
     }
 }

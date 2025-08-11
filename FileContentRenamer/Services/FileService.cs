@@ -62,6 +62,84 @@ namespace FileContentRenamer.Services
                 var fileType = Path.GetExtension(filePath).ToLowerInvariant();
                 Log.Debug("File type: {FileType}", fileType);
 
+                // If the file already follows the naming convention service_yyyy-MM-dd_payment, skip content extraction
+                string? directory = Path.GetDirectoryName(filePath);
+                if (directory == null)
+                {
+                    Log.Error("Could not determine directory for {FilePath}", filePath);
+                    return;
+                }
+
+                string baseName = Path.GetFileNameWithoutExtension(fileName);
+                if (IsAlreadyNamedFilename(baseName))
+                {
+                    Log.Debug("File already follows naming convention, skipping content extraction: {FileName}", fileName);
+
+                    // Move into year/month folder if applicable
+                    string earlyDateStr = ExtractDateFromFilename(baseName);
+                    string earlyTargetDirectory = directory;
+
+                    if (DateTime.TryParse(earlyDateStr, out DateTime earlyFileDate))
+                    {
+                        string yearFolder = earlyFileDate.Year.ToString();
+                        string monthFolder = $"{earlyFileDate.Month:D2}_{GetMonthName(earlyFileDate.Month)}";
+
+                        if (!IsInYearMonthStructure(directory))
+                        {
+                            DirectoryInfo currentDir = new DirectoryInfo(directory);
+                            bool isCurrentDirYearFolder = Regex.IsMatch(currentDir.Name, @"^\d{4}$");
+
+                            string yearPath = isCurrentDirYearFolder ? directory : Path.Combine(directory, yearFolder);
+                            if (!isCurrentDirYearFolder && !Directory.Exists(yearPath))
+                            {
+                                Log.Information("Creating year folder: {YearFolder}", yearPath);
+                                Directory.CreateDirectory(yearPath);
+                            }
+
+                            string monthPath = Path.Combine(yearPath, monthFolder);
+                            if (!Directory.Exists(monthPath))
+                            {
+                                Log.Information("Creating month folder: {MonthFolder}", monthPath);
+                                Directory.CreateDirectory(monthPath);
+                            }
+
+                            earlyTargetDirectory = monthPath;
+                            Log.Debug("File will be moved to year/month folder: {TargetDirectory}", earlyTargetDirectory);
+                        }
+                        else
+                        {
+                            Log.Debug("File already in year/month folder structure: {Directory}", directory);
+                        }
+                    }
+
+                    string earlyExtension = Path.GetExtension(filePath);
+                    string targetPath = Path.Combine(earlyTargetDirectory, fileName);
+
+                    if (targetPath.Equals(filePath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Log.Information("File already has an appropriate name and location: {FileName}", fileName);
+                        return;
+                    }
+
+                    if (File.Exists(targetPath))
+                    {
+                        Log.Debug("File name conflict detected for {TargetPath}", targetPath);
+                        int counter = 1;
+                        string uniquePath;
+                        do
+                        {
+                            uniquePath = Path.Combine(earlyTargetDirectory, $"{baseName}_{counter}{earlyExtension}");
+                            counter++;
+                        } while (File.Exists(uniquePath));
+                        targetPath = uniquePath;
+                        Log.Debug("Using unique name to avoid conflict: {NewFileName}", Path.GetFileName(targetPath));
+                    }
+
+                    Log.Information("Renaming: {OldFileName} -> {NewFileName}", Path.GetFileName(filePath), Path.GetFileName(targetPath));
+                    File.Move(filePath, targetPath);
+                    return;
+                }
+
                 // Find the appropriate processor for this file type
                 var processor = _processors.FirstOrDefault(p => p.CanProcess(filePath));
                 if (processor == null)
@@ -102,7 +180,6 @@ namespace FileContentRenamer.Services
                 Log.Debug("Generated new filename: {NewFilename}", newFilename);
 
                 // Rename the file
-                string? directory = Path.GetDirectoryName(filePath);
                 string extension = Path.GetExtension(filePath);
                 
                 // Ensure directory is not null (addresses CS8604 warning)
@@ -128,17 +205,34 @@ namespace FileContentRenamer.Services
                     // Check if we're already in a year/month subfolder structure
                     if (!IsInYearMonthStructure(directory))
                     {
-                        // Create or use year/month subdirectories
-                        string yearPath = Path.Combine(directory, yearFolder);
-                        string monthPath = Path.Combine(yearPath, monthFolder);
+                        // Check if the current directory is already a year folder
+                        DirectoryInfo currentDir = new DirectoryInfo(directory);
+                        bool isCurrentDirYearFolder = Regex.IsMatch(currentDir.Name, @"^\d{4}$");
                         
-                        // Create the directories if they don't exist
-                        if (!Directory.Exists(yearPath))
+                        string yearPath;
+                        string monthPath;
+                        
+                        if (isCurrentDirYearFolder)
                         {
-                            Log.Information("Creating year folder: {YearFolder}", yearPath);
-                            Directory.CreateDirectory(yearPath);
+                            // We're already in a year folder, just add the month folder directly
+                            yearPath = directory; // current directory is already the year folder
+                            Log.Debug("Already in year folder: {YearFolder}", yearPath);
+                        }
+                        else
+                        {
+                            // Create or use year/month subdirectories
+                            yearPath = Path.Combine(directory, yearFolder);
+                            
+                            // Create the year directory if it doesn't exist
+                            if (!Directory.Exists(yearPath))
+                            {
+                                Log.Information("Creating year folder: {YearFolder}", yearPath);
+                                Directory.CreateDirectory(yearPath);
+                            }
                         }
                         
+                        // Now create the month directory inside the year directory
+                        monthPath = Path.Combine(yearPath, monthFolder);
                         if (!Directory.Exists(monthPath))
                         {
                             Log.Information("Creating month folder: {MonthFolder}", monthPath);
@@ -175,7 +269,8 @@ namespace FileContentRenamer.Services
                     string uniquePath;
                     
                     do {
-                        uniquePath = Path.Combine(directory, $"{baseFileName}_{counter}{extension}");
+                        // Use the targetDirectory (which may be a year/month folder), not the original directory
+                        uniquePath = Path.Combine(targetDirectory, $"{baseFileName}_{counter}{extension}");
                         counter++;
                     } while (File.Exists(uniquePath));
                     
@@ -194,6 +289,12 @@ namespace FileContentRenamer.Services
                 Log.Error(ex, "Error processing {FilePath}", filePath);
 
             }
+        }
+
+        private static bool IsAlreadyNamedFilename(string filenameWithoutExtension)
+        {
+            // Matches: service_yyyy-MM-dd_payment
+            return Regex.IsMatch(filenameWithoutExtension, @"^[^_]+_\d{4}-\d{2}-\d{2}_[^_]+$");
         }
 
         private string GenerateFilename(string content, string originalPath)
@@ -431,6 +532,7 @@ namespace FileContentRenamer.Services
         
         /// <summary>
         /// Checks if a directory is already part of a year/month folder structure
+        /// or if it's a year folder itself
         /// </summary>
         private static bool IsInYearMonthStructure(string directoryPath)
         {
@@ -446,6 +548,16 @@ namespace FileContentRenamer.Services
                 }
                 
                 string parentFolderName = new DirectoryInfo(parentDir).Name;
+                
+                // Check if current folder name is a year (4 digits)
+                bool isCurrentFolderYear = Regex.IsMatch(folderName, @"^\d{4}$");
+                
+                // If we're already in a year folder, don't create another year folder
+                if (isCurrentFolderYear)
+                {
+                    Log.Debug("Current directory is already a year folder: {Directory}", folderName);
+                    return true;
+                }
                 
                 // Check if folder name is a month pattern like "01_enero"
                 bool isMonthFolder = Regex.IsMatch(folderName, @"^\d{2}_[a-z]+$");

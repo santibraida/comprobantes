@@ -1,8 +1,6 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Text;
 using FileContentRenamer.Models;
-using Tesseract;
 using Serilog;
 
 namespace FileContentRenamer.Services
@@ -10,56 +8,12 @@ namespace FileContentRenamer.Services
     public class ImageProcessor : IFileProcessor
     {
         private readonly AppConfig _config;
-        private static bool _tesseractPathsInitialized = false;
-        private bool _useLibrary = true; // Try library approach first, then fall back to command-line
 
         public ImageProcessor(AppConfig config)
         {
             _config = config;
             Log.Debug("ImageProcessor initialized");
-            
-            // Try to initialize Tesseract paths if not done already
-            if (!_tesseractPathsInitialized)
-            {
-                try
-                {
-          InitializeTesseractPaths();
-                    _tesseractPathsInitialized = true;
-                    Log.Debug("Tesseract paths initialized successfully");
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "Failed to initialize Tesseract paths");
-                }
-            }
-            
-            // Verify Tesseract is available (checks both library and command-line)
             VerifyTesseractAvailability();
-        }
-        
-        private static void InitializeTesseractPaths()
-        {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                // Common Homebrew paths on macOS
-                string[] possiblePaths = [
-                    "/opt/homebrew/lib", 
-                    "/usr/local/lib",
-                    "/opt/homebrew/Cellar/leptonica/1.85.0/lib",
-                    "/opt/homebrew/Cellar/tesseract/5.5.1/lib"
-                ];
-                
-                // Tell .NET where to look for native libraries
-                string pathVar = Environment.GetEnvironmentVariable("DYLD_LIBRARY_PATH") ?? "";
-                string newPath = string.Join(":", possiblePaths);
-                if (!string.IsNullOrEmpty(pathVar))
-                {
-                    newPath = pathVar + ":" + newPath;
-                }
-                Environment.SetEnvironmentVariable("DYLD_LIBRARY_PATH", newPath);
-                
-                Log.Debug("Set DYLD_LIBRARY_PATH to: {Path}", newPath);
-            }
         }
         
         private void VerifyTesseractAvailability()
@@ -81,7 +35,7 @@ namespace FileContentRenamer.Services
                 Log.Information("Tessdata directory found at: {TessdataDir}", _config.TesseractDataPath);
             }
             
-            // Also check for command-line availability
+            // Check for command-line availability
             try
             {
                 var startInfo = new ProcessStartInfo
@@ -106,15 +60,11 @@ namespace FileContentRenamer.Services
                 else
                 {
                     Log.Warning("Tesseract command-line not found. Please install Tesseract OCR.");
-                    // If command-line is not available, try to use library only
-                    _useLibrary = true;
                 }
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Could not verify Tesseract command-line availability");
-                // If command-line check fails, try to use library only
-                _useLibrary = true;
             }
         }
 
@@ -146,97 +96,13 @@ namespace FileContentRenamer.Services
                     return string.Empty;
                 }
                 
-                // First try using the Tesseract library approach
-                if (_useLibrary)
-                {
-                    try
-                    {
-                        var libraryResult = await ExtractUsingLibraryAsync(filePath);
-                        if (!string.IsNullOrEmpty(libraryResult))
-                        {
-                            return libraryResult;
-                        }
-                        // If we get here, the library approach failed but didn't throw
-                        Log.Warning("Tesseract library approach returned empty result, falling back to command-line");
-                        _useLibrary = false;
-                    }
-                    catch (Exception ex)
-                    {
-                        // Library approach failed with exception, log and fall back to command-line
-                        Log.Warning(ex, "Tesseract library approach failed, falling back to command-line");
-                        _useLibrary = false;
-                    }
-                }
-                
-                // If library approach is disabled or failed, use command-line approach
+                // Use command-line approach only
                 return await ExtractUsingCommandLineAsync(filePath);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to extract text from image: {FilePath}", Path.GetFileName(filePath));
                 return string.Empty;
-            }
-        }
-        
-        private async Task<string> ExtractUsingLibraryAsync(string filePath)
-        {
-            if (string.IsNullOrEmpty(_config.TesseractLanguage) || string.IsNullOrEmpty(_config.TesseractDataPath))
-            {
-                Log.Error("Tesseract configuration is missing: Language={Lang}, DataPath={Path}", 
-                    _config.TesseractLanguage, _config.TesseractDataPath);
-                return string.Empty;
-            }
-            
-            // Check if language data files exist
-            string[] langFiles = _config.TesseractLanguage.Split('+');
-            foreach (var lang in langFiles)
-            {
-                string langFile = Path.Combine(_config.TesseractDataPath, $"{lang}.traineddata");
-                if (!File.Exists(langFile))
-                {
-                    string error = $"Tesseract language file not found: {langFile}";
-                    Log.Error("Tesseract language error: {Error}", error);
-                    return string.Empty;
-                }
-            }
-            
-            // Process image files using Tesseract OCR
-            Log.Debug("Creating Tesseract engine with data path: {TesseractDataPath}", _config.TesseractDataPath);
-            
-            // Using Tesseract SDK with enhanced configuration
-            using (var engine = new TesseractEngine(_config.TesseractDataPath, _config.TesseractLanguage))
-            {
-                // Configure engine for better quality
-                engine.SetVariable("tessedit_char_whitelist", "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:¡!¿?\"'()[]{}-_=+*/\\@#$%&|<> ");
-                engine.SetVariable("debug_file", "/dev/null");
-                engine.SetVariable("tessedit_do_invert", "0");
-                engine.SetVariable("textord_heavy_nr", "1");  // Helps with dark backgrounds
-                engine.SetVariable("textord_min_linesize", "2.5");  // Better detection of small text
-                
-                // Load the image
-                Log.Debug("Loading image file: {FileName}", Path.GetFileName(filePath));
-                using (var img = Pix.LoadFromFile(filePath))
-                {
-                    // Process the image with Tesseract OCR
-                    Log.Debug("Processing image with Tesseract library");
-                    using (var page = engine.Process(img))
-                    {
-                        // Get the OCR text result
-                        string text = page.GetText();
-                        
-                        // Log the first part of the extracted text
-                        string previewText = text.Length > 100 ? text.Substring(0, 100) + "..." : text;
-                        Log.Debug("Text extracted from image (preview): {PreviewText}", previewText);
-                        
-                        // Additional check for Quilmes specifically
-                        if (previewText.ToLowerInvariant().Contains("quil"))
-                        {
-                            Log.Information("Detected potential Quilmes document");
-                        }
-                        
-                        return await Task.FromResult(text);
-                    }
-                }
             }
         }
         
@@ -300,7 +166,7 @@ namespace FileContentRenamer.Services
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = "tesseract",
-                    Arguments = $"\"{filePath}\" \"{outputBase}\" -l {languageParam}",
+                    Arguments = $"\"{filePath}\" \"{outputBase}\" -l {languageParam} --tessdata-dir \"{_config.TesseractDataPath}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
