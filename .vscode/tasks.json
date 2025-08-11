@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "command": "dotnet",
+      "type": "shell",
+      "args": [
+        "build",
+        "${workspaceFolder}/FileContentRenamer/FileContentRenamer.csproj"
+      ],
+      "problemMatcher": ["$msCompile"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build and run",
+      "command": "dotnet",
+      "type": "shell",
+      "args": [
+        "run",
+        "--project",
+        "${workspaceFolder}/FileContentRenamer/FileContentRenamer.csproj"
+      ],
+      "problemMatcher": ["$msCompile"],
+      "group": "test",
+      "isBackground": false
+    }
+  ]
+}
