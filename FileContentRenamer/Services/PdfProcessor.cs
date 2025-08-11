@@ -9,7 +9,7 @@ namespace FileContentRenamer.Services
     {
         public bool CanProcess(string filePath)
         {
-            return Path.GetExtension(filePath).ToLowerInvariant() == ".pdf";
+            return Path.GetExtension(filePath).Equals(".pdf", StringComparison.InvariantCultureIgnoreCase);
         }
 
         public async Task<string> ExtractContentAsync(string filePath)

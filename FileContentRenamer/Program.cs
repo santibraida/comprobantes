@@ -36,6 +36,8 @@ namespace FileContentRenamer
                 Log.Debug("AppConfig initialized from configuration file");
 
                 // Get directory path from command line args or prompt user
+                string? path = null; // Declare the path variable here
+                
                 if (args.Length > 0)
                 {
                     config.BasePath = args[0];
@@ -46,17 +48,24 @@ namespace FileContentRenamer
                 }
                 else
                 {
-                    string? defaultPath = !string.IsNullOrEmpty(config.LastUsedPath) ? config.LastUsedPath : config.BasePath;
-                    Log.Debug("Default path selection: LastUsedPath='{LastUsedPath}', BasePath='{BasePath}', Selected='{DefaultPath}'", 
-                        config.LastUsedPath, config.BasePath, defaultPath);
-                    
-                    // Show the last used path in the prompt if available
-                    string prompt = !string.IsNullOrEmpty(config.LastUsedPath) 
-                        ? $"Enter directory path to scan (leave blank for last used path: '{config.LastUsedPath}'): "
-                        : $"Enter directory path to scan (leave blank for default: '{config.BasePath}'): ";
-                    
-                    Log.Information(prompt);
-                    string? path = Console.ReadLine();
+                    // If we have a valid LastUsedPath, use it directly without prompting
+                    if (!string.IsNullOrEmpty(config.LastUsedPath) && Directory.Exists(config.LastUsedPath))
+                    {
+                        config.BasePath = config.LastUsedPath;
+                        Log.Information("Automatically using last used directory path: {BasePath}", config.BasePath);
+                    }
+                    else
+                    {
+                        string? defaultPath = !string.IsNullOrEmpty(config.LastUsedPath) ? config.LastUsedPath : config.BasePath;
+                        Log.Debug("Default path selection: LastUsedPath='{LastUsedPath}', BasePath='{BasePath}', Selected='{DefaultPath}'", 
+                            config.LastUsedPath, config.BasePath, defaultPath);
+                        
+                        // Show prompt only if we don't have a valid LastUsedPath
+                        string prompt = $"Enter directory path to scan (leave blank for default: '{config.BasePath}'): ";
+                        
+                        Log.Information(prompt);
+                        path = Console.ReadLine();
+                    }
                     
                     if (!string.IsNullOrWhiteSpace(path))
                     {
@@ -87,16 +96,8 @@ namespace FileContentRenamer
                     }
                     else
                     {
-                        // Use last used path if available
-                        if (!string.IsNullOrEmpty(config.LastUsedPath) && Directory.Exists(config.LastUsedPath))
-                        {
-                            config.BasePath = config.LastUsedPath;
-                            Log.Information("Using last used directory path: {BasePath}", config.BasePath);
-                        }
-                        else
-                        {
-                            Log.Debug("Using default directory path: {BasePath}", config.BasePath);
-                        }
+                        // We're using the default path since the user didn't provide a new one
+                        Log.Debug("Using default directory path: {BasePath}", config.BasePath);
                     }
                 }
 
@@ -108,11 +109,8 @@ namespace FileContentRenamer
                 }
                 Log.Debug("Directory validated: {BasePath}", config.BasePath);
 
-                // Ask about subdirectories
-                Log.Information("Include subdirectories? (Y/N, default: Y): ");
-                string includeSubdirs = Console.ReadLine()?.ToUpperInvariant() ?? "Y";
-                config.IncludeSubdirectories = includeSubdirs != "N";
-                Log.Debug("Include subdirectories: {IncludeSubdirectories}", config.IncludeSubdirectories);
+                // Log whether subdirectories will be included (from configuration)
+                Log.Debug("Include subdirectories (from config): {IncludeSubdirectories}", config.IncludeSubdirectories);
 
                 // Create file processors
                 var processors = new List<IFileProcessor>
@@ -139,9 +137,6 @@ namespace FileContentRenamer
                 // Close and flush the log
                 Log.CloseAndFlush();
             }
-
-            Log.Information("Press any key to exit...");
-            Console.ReadKey();
         }
 
         /// <summary>

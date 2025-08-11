@@ -23,7 +23,7 @@ namespace FileContentRenamer.Services
             {
                 try
                 {
-                    InitializeTesseractPaths();
+          InitializeTesseractPaths();
                     _tesseractPathsInitialized = true;
                     Log.Debug("Tesseract paths initialized successfully");
                 }
@@ -37,17 +37,17 @@ namespace FileContentRenamer.Services
             VerifyTesseractAvailability();
         }
         
-        private void InitializeTesseractPaths()
+        private static void InitializeTesseractPaths()
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
                 // Common Homebrew paths on macOS
-                string[] possiblePaths = {
+                string[] possiblePaths = [
                     "/opt/homebrew/lib", 
                     "/usr/local/lib",
                     "/opt/homebrew/Cellar/leptonica/1.85.0/lib",
                     "/opt/homebrew/Cellar/tesseract/5.5.1/lib"
-                };
+                ];
                 
                 // Tell .NET where to look for native libraries
                 string pathVar = Environment.GetEnvironmentVariable("DYLD_LIBRARY_PATH") ?? "";
@@ -275,8 +275,8 @@ namespace FileContentRenamer.Services
                         langOutput.AppendLine(langProcess.StandardError.ReadToEnd());
                         langProcess.WaitForExit();
                         
-                        // Log available languages
-                        Log.Debug("Available Tesseract languages: {Languages}", langOutput.ToString().Trim());
+                        // Skip logging the available languages list as it's verbose
+                        Log.Debug("Tesseract languages check completed");
                     }
                 }
                 catch (Exception ex)
@@ -307,8 +307,8 @@ namespace FileContentRenamer.Services
                     CreateNoWindow = true
                 };
                 
-                // Log the command
-                Log.Debug("Running Tesseract command: {Command} {Arguments}", startInfo.FileName, startInfo.Arguments);
+                // Simplified command logging
+                Log.Debug("Running Tesseract OCR process");
                 
                 // Run the process
                 using (var process = Process.Start(startInfo))
@@ -332,9 +332,8 @@ namespace FileContentRenamer.Services
                         {
                             string text = await File.ReadAllTextAsync(outputTxtFile);
                             
-                            // Log the first part of the extracted text
-                            string previewText = text.Length > 100 ? text.Substring(0, 100) + "..." : text;
-                            Log.Debug("Text extracted from image using command-line (preview): {PreviewText}", previewText);
+                            // Only log length of extracted text instead of content preview
+                            Log.Debug("Text extracted from image using command-line (length: {TextLength} characters)", text.Length);
                             
                             return text;
                         }

@@ -6,7 +6,7 @@ namespace FileContentRenamer.Services
     {
         public bool CanProcess(string filePath)
         {
-            return Path.GetExtension(filePath).ToLowerInvariant() == ".txt";
+            return Path.GetExtension(filePath).Equals(".txt", StringComparison.InvariantCultureIgnoreCase);
         }
 
         public async Task<string> ExtractContentAsync(string filePath)

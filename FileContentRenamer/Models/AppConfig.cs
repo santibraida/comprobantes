@@ -52,6 +52,17 @@ namespace FileContentRenamer.Models
                 // Bind configuration to the AppConfig instance
                 configuration.GetSection("AppConfig").Bind(appConfig);
                 
+                // Extract NamingRules default values from configuration
+                var namingRulesSection = configuration.GetSection("AppConfig:NamingRules");
+                string defaultServiceName = namingRulesSection["DefaultServiceName"] ?? "servicio";
+                string defaultPaymentMethod = namingRulesSection["DefaultPaymentMethod"] ?? "santander";
+                
+                // Explicitly set NamingRules with default values from configuration
+                appConfig.NamingRules = new NamingRules(defaultServiceName, defaultPaymentMethod);
+                
+                // Rebind rules collection that would have been lost in the new instance creation
+                namingRulesSection.GetSection("Rules").Bind(appConfig.NamingRules.Rules);
+                
                 // Check if LastUsedPath exists and is valid
                 if (!string.IsNullOrEmpty(appConfig.LastUsedPath) && Directory.Exists(appConfig.LastUsedPath))
                 {
@@ -88,8 +99,21 @@ namespace FileContentRenamer.Models
                 {
                     throw new InvalidOperationException("TesseractLanguage is missing in configuration file");
                 }
+
+                // Validate NamingRules default values are set
+                if (string.IsNullOrEmpty(appConfig.NamingRules.DefaultServiceName))
+                {
+                    throw new InvalidOperationException("DefaultServiceName is missing in NamingRules configuration");
+                }
+
+                if (string.IsNullOrEmpty(appConfig.NamingRules.DefaultPaymentMethod))
+                {
+                    throw new InvalidOperationException("DefaultPaymentMethod is missing in NamingRules configuration");
+                }
                 
                 Log.Debug("Loaded configuration with LastUsedPath: {LastUsedPath}", appConfig.LastUsedPath);
+                Log.Debug("Loaded NamingRules with DefaultServiceName: {DefaultServiceName}, DefaultPaymentMethod: {DefaultPaymentMethod}", 
+                    appConfig.NamingRules.DefaultServiceName, appConfig.NamingRules.DefaultPaymentMethod);
                 
                 // Override with command-line provided base path if specified
                 if (!string.IsNullOrEmpty(basePath))
@@ -139,12 +163,12 @@ namespace FileContentRenamer.Models
         /// </summary>
         private static string? FindConfigFile(string baseDir, string solutionDir)
         {
-            string[] possibleLocations = new[] 
-            {
+            string[] possibleLocations =
+            [
                 Path.Combine(baseDir, "appsettings.json"),
                 Path.Combine(Directory.GetParent(baseDir)?.FullName ?? baseDir, "appsettings.json"),
                 Path.Combine(solutionDir, "appsettings.json")
-            };
+            ];
             
             foreach (var location in possibleLocations) 
             {

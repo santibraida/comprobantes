@@ -282,7 +282,7 @@ namespace FileContentRenamer.Services
         /// <summary>
         /// Standardizes date format to yyyy-MM-dd
         /// </summary>
-        private string StandardizeDate(string dateString)
+        private static string StandardizeDate(string dateString)
         {
             try
             {
@@ -313,7 +313,7 @@ namespace FileContentRenamer.Services
 
 
 
-        private string CleanupFileName(string filename)
+        private static string CleanupFileName(string filename)
         {
             if (string.IsNullOrWhiteSpace(filename))
                 return string.Empty;
@@ -358,7 +358,7 @@ namespace FileContentRenamer.Services
         /// <summary>
         /// Extracts the date part from a filename that follows the pattern: service_date_paymentmethod
         /// </summary>
-        private string ExtractDateFromFilename(string filename)
+        private static string ExtractDateFromFilename(string filename)
         {
             try
             {
@@ -413,7 +413,7 @@ namespace FileContentRenamer.Services
         /// <summary>
         /// Gets the localized month name for a given month number
         /// </summary>
-        private string GetMonthName(int monthNumber)
+        private static string GetMonthName(int monthNumber)
         {
             string[] monthNames = 
             [
@@ -432,7 +432,7 @@ namespace FileContentRenamer.Services
         /// <summary>
         /// Checks if a directory is already part of a year/month folder structure
         /// </summary>
-        private bool IsInYearMonthStructure(string directoryPath)
+        private static bool IsInYearMonthStructure(string directoryPath)
         {
             try
             {

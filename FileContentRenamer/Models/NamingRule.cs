@@ -11,14 +11,9 @@ namespace FileContentRenamer.Models
         public string Name { get; set; } = "";
         
         /// <summary>
-        /// The priority of the rule - higher numbers are checked first
-        /// </summary>
-        public int Priority { get; set; }
-        
-        /// <summary>
         /// List of keywords that all must be present for this rule to match
         /// </summary>
-        public List<string> Keywords { get; set; } = new List<string>();
+        public List<string> Keywords { get; set; } = [];
         
         /// <summary>
         /// Service name to use in the filename (e.g., "muni_quilmes", "high_school", etc.)
@@ -54,6 +49,7 @@ namespace FileContentRenamer.Models
             
             // Check each keyword and log which ones are missing
             var missingKeywords = new List<string>();
+
             foreach (var keyword in Keywords)
             {
                 if (!lowerContent.Contains(keyword.ToLowerInvariant()))
@@ -82,19 +78,36 @@ namespace FileContentRenamer.Models
     public class NamingRules
     {
         /// <summary>
-        /// Collection of all naming rules, ordered by priority
+        /// Collection of all naming rules
         /// </summary>
-        public List<NamingRule> Rules { get; set; } = new List<NamingRule>();
+        public List<NamingRule> Rules { get; set; } = [];
         
         /// <summary>
         /// Default service name to use if no rules match
         /// </summary>
-        public string DefaultServiceName { get; set; } = "servicio";
+        public string DefaultServiceName { get; set; } = "";
         
         /// <summary>
         /// Default payment method to use if not specified by a rule
         /// </summary>
-        public string DefaultPaymentMethod { get; set; } = "pago";
+        public string DefaultPaymentMethod { get; set; } = "";
+        
+        /// <summary>
+        /// Constructor with default parameters
+        /// </summary>
+        public NamingRules() { }
+        
+        /// <summary>
+        /// Constructor that explicitly sets default values
+        /// </summary>
+        public NamingRules(string defaultServiceName, string defaultPaymentMethod)
+        {
+            DefaultServiceName = defaultServiceName;
+            DefaultPaymentMethod = defaultPaymentMethod;
+            
+            Log.Debug("NamingRules initialized with DefaultServiceName: {DefaultServiceName}, DefaultPaymentMethod: {DefaultPaymentMethod}",
+                DefaultServiceName, DefaultPaymentMethod);
+        }
         
         /// <summary>
         /// Finds the first rule that matches the content
@@ -109,19 +122,10 @@ namespace FileContentRenamer.Models
                 return null;
             }
                 
-            // Sort rules by priority (descending) to ensure high priority rules are checked first
-            var sortedRules = Rules.OrderByDescending(r => r.Priority).ToList();
-            
-            Log.Debug("Checking {RuleCount} rules for content match", sortedRules.Count);
-            
-            // Print a sample of content for debugging
-            string contentSample = content.Length > 100 ? content.Substring(0, 100) + "..." : content;
-            Log.Debug("Content sample: {ContentSample}", contentSample);
-            
-            foreach (var rule in sortedRules)
+            foreach (var rule in Rules.ToList())
             {
-                Log.Debug("Checking rule: '{RuleName}' (Priority: {Priority}, Keywords: {Keywords})", 
-                    rule.Name, rule.Priority, string.Join(", ", rule.Keywords));
+                Log.Debug("Checking rule: '{RuleName}', Keywords: {Keywords})", 
+                    rule.Name, string.Join(", ", rule.Keywords));
                     
                 if (rule.Matches(content))
                 {
