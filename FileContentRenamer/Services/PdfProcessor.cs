@@ -9,6 +9,9 @@ namespace FileContentRenamer.Services
     {
         public bool CanProcess(string filePath)
         {
+            if (string.IsNullOrWhiteSpace(filePath))
+                return false;
+                
             return Path.GetExtension(filePath).Equals(".pdf", StringComparison.InvariantCultureIgnoreCase);
         }
 

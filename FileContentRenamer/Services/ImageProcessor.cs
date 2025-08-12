@@ -11,7 +11,7 @@ namespace FileContentRenamer.Services
 
         public ImageProcessor(AppConfig config)
         {
-            _config = config;
+            _config = config ?? throw new ArgumentNullException(nameof(config));
             VerifyTesseractAvailability();
         }
         
