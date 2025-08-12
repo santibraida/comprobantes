@@ -8,6 +8,7 @@ x86/
 [Bb]in/
 [Oo]bj/
 [Ll]og/
+TestResults/
 
 # Visual Studio / VS Code files
 .vs/
