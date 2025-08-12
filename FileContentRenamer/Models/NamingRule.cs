@@ -26,6 +26,11 @@ namespace FileContentRenamer.Models
         public string PaymentMethod { get; set; } = "";
         
         /// <summary>
+        /// Optional date override in yyyy-MM-dd format for cases where OCR fails
+        /// </summary>
+        public string? DateOverride { get; set; }
+        
+        /// <summary>
         /// Checks if this rule matches the provided content
         /// </summary>
         /// <param name="content">The text content to check against the rule's keywords</param>
@@ -152,17 +157,19 @@ namespace FileContentRenamer.Models
             // Only use the rule's PaymentMethod if it's not empty
             string paymentMethod = (!string.IsNullOrEmpty(rule?.PaymentMethod)) ? rule.PaymentMethod : DefaultPaymentMethod;
             
+            // Use date override if available and the content seems minimal (likely OCR failure)
+            string finalDate = date;
+            if (rule != null && !string.IsNullOrEmpty(rule.DateOverride) && IsMinimalContent(content))
+            {
+                finalDate = rule.DateOverride;
+                Log.Information("Using date override '{DateOverride}' for rule '{RuleName}' due to minimal content", 
+                    rule.DateOverride, rule.Name);
+            }
+            
             if (rule != null)
             {
                 Log.Information("Using rule '{RuleName}' for naming. Service: {Service}, Payment: {Payment}", 
                     rule.Name, serviceName, paymentMethod);
-                
-                // Add explicit logging about payment method
-                if (string.IsNullOrEmpty(rule.PaymentMethod))
-                {
-                    Log.Debug("Rule '{RuleName}' doesn't specify PaymentMethod, using default: {DefaultPayment}", 
-                        rule.Name, DefaultPaymentMethod);
-                }
             }
             else
             {
@@ -170,7 +177,34 @@ namespace FileContentRenamer.Models
                     DefaultServiceName, DefaultPaymentMethod);
             }
             
-            return $"{serviceName}_{date}_{paymentMethod}";
+            return $"{serviceName}_{finalDate}_{paymentMethod}";
+        }
+        
+        /// <summary>
+        /// Checks if the content appears to be minimal (likely due to OCR failure)
+        /// </summary>
+        private static bool IsMinimalContent(string content)
+        {
+            if (string.IsNullOrWhiteSpace(content))
+                return true;
+                
+            // Remove whitespace and count meaningful characters
+            string cleaned = content.Trim().Replace("\n", " ").Replace("\r", "");
+            var words = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            
+            // For Gloria/MercadoPago transfers, consider minimal if no date is present
+            // even if there are multiple words
+            if (content.Contains("mercado", StringComparison.OrdinalIgnoreCase) && 
+                content.Contains("gloria", StringComparison.OrdinalIgnoreCase))
+            {
+                // Check if any date pattern exists
+                bool hasDate = System.Text.RegularExpressions.Regex.IsMatch(content, 
+                    @"\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}|\d{2,4}[-/\.]\d{1,2}[-/\.]\d{1,2}");
+                return !hasDate; // Minimal if no date found
+            }
+            
+            // Consider minimal if less than 5 words or less than 20 characters
+            return words.Length < 5 || cleaned.Length < 20;
         }
     }
 }

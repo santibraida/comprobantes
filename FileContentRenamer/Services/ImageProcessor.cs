@@ -12,7 +12,6 @@ namespace FileContentRenamer.Services
         public ImageProcessor(AppConfig config)
         {
             _config = config;
-            Log.Debug("ImageProcessor initialized");
             VerifyTesseractAvailability();
         }
         
@@ -73,12 +72,6 @@ namespace FileContentRenamer.Services
             string extension = Path.GetExtension(filePath).ToLowerInvariant();
             bool canProcess = extension == ".jpg" || extension == ".jpeg" || extension == ".png" || extension == ".tif" || extension == ".tiff";
             
-            // Log which files are identified as processable by this processor
-            if (canProcess)
-            {
-                Log.Debug("ImageProcessor identified file for processing: {FilePath}", Path.GetFileName(filePath));
-            }
-            
             return canProcess;
         }
 
@@ -132,7 +125,6 @@ namespace FileContentRenamer.Services
                 
                 try
                 {
-                    Log.Debug("Checking available Tesseract languages");
                     using var langProcess = Process.Start(langCheckStartInfo);
                     if (langProcess != null)
                     {
@@ -140,9 +132,6 @@ namespace FileContentRenamer.Services
                         langOutput.AppendLine(langProcess.StandardOutput.ReadToEnd());
                         langOutput.AppendLine(langProcess.StandardError.ReadToEnd());
                         langProcess.WaitForExit();
-                        
-                        // Skip logging the available languages list as it's verbose
-                        Log.Debug("Tesseract languages check completed");
                     }
                 }
                 catch (Exception ex)
@@ -154,11 +143,9 @@ namespace FileContentRenamer.Services
                 string languageParam = _config.TesseractLanguage ?? "eng";
                 
                 // If language contains a plus (+), try with just the first language
-                if (languageParam.Contains("+"))
+                if (languageParam.Contains('+'))
                 {
                     string primaryLang = languageParam.Split('+')[0];
-                    Log.Debug("Using primary language: {PrimaryLanguage} (from {OriginalLanguage})", 
-                        primaryLang, languageParam);
                     languageParam = primaryLang;
                 }
                 
@@ -172,9 +159,6 @@ namespace FileContentRenamer.Services
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
-                
-                // Simplified command logging
-                Log.Debug("Running Tesseract OCR process");
                 
                 // Run the process
                 using (var process = Process.Start(startInfo))
@@ -197,11 +181,7 @@ namespace FileContentRenamer.Services
                         if (File.Exists(outputTxtFile))
                         {
                             string text = await File.ReadAllTextAsync(outputTxtFile);
-                            
-                            // Only log length of extracted text instead of content preview
-                            Log.Debug("Text extracted from image using command-line (length: {TextLength} characters)", text.Length);
-                            
-                            return text;
+                            return text ?? string.Empty;
                         }
                         else
                         {

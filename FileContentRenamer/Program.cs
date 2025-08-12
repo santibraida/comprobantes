@@ -1,6 +1,8 @@
 ﻿using FileContentRenamer.Models;
 using FileContentRenamer.Services;
+using FileContentRenamer.Configuration;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Events;
 
@@ -33,7 +35,6 @@ namespace FileContentRenamer
                 
                 Log.Information("Using Tesseract data path: {TesseractDataPath}", config.TesseractDataPath);
                 Log.Information("Using Tesseract language: {TesseractLanguage}", config.TesseractLanguage);
-                Log.Debug("AppConfig initialized from configuration file");
 
                 // Get directory path from command line args or prompt user
                 string? path = null; // Declare the path variable here
@@ -41,7 +42,6 @@ namespace FileContentRenamer
                 if (args.Length > 0)
                 {
                     config.BasePath = args[0];
-                    Log.Debug("Using directory path from command line: {BasePath}", config.BasePath);
                     
                     // Save this path for next time
                     config.SaveLastUsedPath(config.BasePath);
@@ -113,16 +113,11 @@ namespace FileContentRenamer
                 Log.Debug("Include subdirectories (from config): {IncludeSubdirectories}", config.IncludeSubdirectories);
 
                 // Create file processors
-                var processors = new List<IFileProcessor>
-                {
-                    new PdfProcessor(),
-                    new TextProcessor(),
-                    new ImageProcessor(config)
-                };
-                Log.Debug("File processors initialized");
-
-                // Create and run the file service
-                IFileService fileService = new FileService(config, processors);
+                // Configure services using DI container
+                var serviceProvider = ServiceConfiguration.ConfigureServices(config);
+                
+                // Resolve the main service from the container
+                var fileService = serviceProvider.GetRequiredService<IFileService>();
                 Log.Information("Starting file processing");
                 await fileService.ProcessFilesAsync();
 

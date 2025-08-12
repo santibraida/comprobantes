@@ -13,6 +13,8 @@ namespace FileContentRenamer.Models
         public bool IncludeSubdirectories { get; set; } = true; // Only keeping this default
         public string? TesseractDataPath { get; set; }
         public string? TesseractLanguage { get; set; }
+        public bool ForceReprocessAlreadyNamed { get; set; } = false;
+        public int MaxDegreeOfParallelism { get; set; } = Environment.ProcessorCount;
         public NamingRules NamingRules { get; set; } = new NamingRules();
         
         /// <summary>
