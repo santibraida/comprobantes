@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using FileContentRenamer.Models;
 using Serilog;
 
 namespace FileContentRenamer.Services
@@ -13,6 +14,12 @@ namespace FileContentRenamer.Services
         };
 
         private static readonly object _directoryLock = new object();
+        private readonly string _basePath;
+
+        public DirectoryOrganizer(AppConfig config)
+        {
+            _basePath = config.BasePath ?? ".";
+        }
 
         public string GetMonthName(int monthNumber)
         {
@@ -28,10 +35,10 @@ namespace FileContentRenamer.Services
 
                 // Check if current directory is a month folder (format: MM_monthname)
                 bool isMonthFolder = Regex.IsMatch(dirInfo.Name, @"^\d{2}_\w+$");
-                
+
                 // Check if parent directory is a year folder (format: yyyy)
                 bool parentIsYearFolder = parentDir != null && Regex.IsMatch(parentDir.Name, @"^\d{4}$");
-                
+
                 // Check if current directory is a year folder
                 bool isYearFolder = Regex.IsMatch(dirInfo.Name, @"^\d{4}$");
 
@@ -45,7 +52,7 @@ namespace FileContentRenamer.Services
 
         public string OrganizeFileIntoDirectoryStructure(string filePath, string dateStr)
         {
-            if (string.IsNullOrEmpty(dateStr) || !DateTime.TryParse(dateStr, out DateTime fileDate))
+            if (string.IsNullOrEmpty(dateStr) || !DateTime.TryParse(dateStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out DateTime fileDate))
             {
                 return filePath; // Return original path if date parsing fails
             }
@@ -65,26 +72,22 @@ namespace FileContentRenamer.Services
             if (IsInYearMonthStructure(directory))
             {
                 DirectoryInfo currentDir = new DirectoryInfo(directory);
-                
+
                 // Check if we're in the correct month folder
                 if (currentDir.Name == monthFolder && currentDir.Parent?.Name == yearFolder)
                 {
                     return filePath; // Already in correct location
                 }
-                
+
                 // We need to move to a different month/year folder
-                DirectoryInfo? parentDir = currentDir.Parent;
-                string basePath = parentDir?.Parent?.FullName ?? directory;
-                
-                return MoveToYearMonthStructure(filePath, basePath, yearFolder, monthFolder);
+                // Use the configured base path to ensure we stay within the original scan directory
+                return MoveToYearMonthStructure(filePath, _basePath, yearFolder, monthFolder);
             }
 
             // Not in year/month structure, need to organize
-            DirectoryInfo currentDirInfo = new DirectoryInfo(directory);
-            bool isCurrentDirYearFolder = Regex.IsMatch(currentDirInfo.Name, @"^\d{4}$");
-
-            string yearPath = isCurrentDirYearFolder ? directory : Path.Combine(directory, yearFolder);
-            if (!isCurrentDirYearFolder && !Directory.Exists(yearPath))
+            // Always use the configured base path to ensure year folders are created in the correct location
+            string yearPath = Path.Combine(_basePath, yearFolder);
+            if (!Directory.Exists(yearPath))
             {
                 Log.Information("Creating year folder: {YearFolder}", yearPath);
                 lock (_directoryLock)
@@ -108,9 +111,9 @@ namespace FileContentRenamer.Services
             // Check if we need to move the file
             if (!string.Equals(filePath, targetPath, StringComparison.OrdinalIgnoreCase))
             {
-                Log.Information("Moving file to organized structure: {Source} -> {Target}", 
+                Log.Information("Moving file to organized structure: {Source} -> {Target}",
                     Path.GetFileName(filePath), Path.GetRelativePath(directory, targetPath));
-                
+
                 // Use lock to prevent race conditions when moving files
                 lock (_directoryLock)
                 {
@@ -123,7 +126,7 @@ namespace FileContentRenamer.Services
             return filePath;
         }
 
-        private string MoveToYearMonthStructure(string currentPath, string basePath, string yearFolder, string monthFolder)
+        private static string MoveToYearMonthStructure(string currentPath, string basePath, string yearFolder, string monthFolder)
         {
             string filename = Path.GetFileName(currentPath);
             string yearPath = Path.Combine(basePath, yearFolder);
@@ -154,9 +157,9 @@ namespace FileContentRenamer.Services
             if (!string.Equals(currentPath, targetPath, StringComparison.OrdinalIgnoreCase))
             {
                 string currentFolder = Path.GetFileName(Path.GetDirectoryName(currentPath) ?? "");
-                Log.Information("Moving file from {CurrentFolder} to {TargetFolder} folder", 
+                Log.Information("Moving file from {CurrentFolder} to {TargetFolder} folder",
                     currentFolder, monthFolder);
-                
+
                 // Use lock to prevent race conditions when moving files
                 lock (_directoryLock)
                 {
@@ -169,7 +172,7 @@ namespace FileContentRenamer.Services
             return currentPath;
         }
 
-        private string EnsureUniqueFilename(string filePath)
+        private static string EnsureUniqueFilename(string filePath)
         {
             if (!File.Exists(filePath))
                 return filePath;

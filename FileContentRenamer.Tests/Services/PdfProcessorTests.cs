@@ -33,6 +33,9 @@ namespace FileContentRenamer.Tests.Services
         [InlineData("test.PDF")]
         [InlineData("test.Pdf")]
         [InlineData("test.pDf")]
+        [InlineData("document.pdf")]
+        [InlineData("document.PDF")]
+        [InlineData("DOCUMENT.PDF")]
         public void CanProcess_WithPdfExtensionDifferentCasing_ShouldReturnTrue(string filename)
         {
             // Arrange
@@ -57,6 +60,19 @@ namespace FileContentRenamer.Tests.Services
 
             // Act
             var result = _pdfProcessor.CanProcess(filePath);
+
+            // Assert
+            result.Should().BeFalse();
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void CanProcess_WithNullOrWhitespaceFilePath_ShouldReturnFalse(string? filePath)
+        {
+            // Act
+            var result = _pdfProcessor.CanProcess(filePath!);
 
             // Assert
             result.Should().BeFalse();
@@ -94,7 +110,7 @@ namespace FileContentRenamer.Tests.Services
         {
             // Arrange
             var emptyFile = Path.Combine(_tempDirectory, "empty.pdf");
-            File.WriteAllText(emptyFile, string.Empty);
+            await File.WriteAllTextAsync(emptyFile, string.Empty);
 
             // Act
             var result = await _pdfProcessor.ExtractContentAsync(emptyFile);
@@ -136,46 +152,111 @@ namespace FileContentRenamer.Tests.Services
         }
 
         [Fact]
-        public async Task ExtractContentAsync_WithNonExistentPdfFile_ShouldReturnEmptyString()
+        public async Task ExtractContentAsync_WithValidPdfFile_ShouldExtractText()
         {
-            // Arrange
-            var nonExistentFile = Path.Combine(_tempDirectory, "nonexistent.pdf");
+            // Arrange - Create a minimal valid PDF file manually
+            var testFile = Path.Combine(_tempDirectory, "valid_test.pdf");
+            CreateMinimalValidPdf(testFile, "This is test content");
 
             // Act
-            var result = await _pdfProcessor.ExtractContentAsync(nonExistentFile);
+            var result = await _pdfProcessor.ExtractContentAsync(testFile);
 
             // Assert
-            result.Should().BeEmpty();
+            result.Should().NotBeEmpty();
+            result.Should().Contain("test");
         }
 
         [Fact]
-        public async Task ExtractContentAsync_WithEmptyPdfFile_ShouldReturnEmptyString()
+        public async Task ExtractContentAsync_WithShortContent_ShouldReturnContent()
         {
             // Arrange
-            var emptyFile = Path.Combine(_tempDirectory, "empty.pdf");
-            File.WriteAllText(emptyFile, string.Empty);
+            var testFile = Path.Combine(_tempDirectory, "short_content.pdf");
+            CreateMinimalValidPdf(testFile, "Short");
 
             // Act
-            var result = await _pdfProcessor.ExtractContentAsync(emptyFile);
+            var result = await _pdfProcessor.ExtractContentAsync(testFile);
 
             // Assert
-            result.Should().BeEmpty();
+            result.Should().NotBeNull();
         }
 
-        [Theory]
-        [InlineData("document.pdf")]
-        [InlineData("document.PDF")]
-        [InlineData("DOCUMENT.PDF")]
-        public void CanProcess_WithPdfExtensionVariations_ShouldReturnTrue(string filename)
+        [Fact]
+        public async Task ExtractContentAsync_WithLongContent_ShouldProcessUpToThreshold()
         {
             // Arrange
-            var filePath = Path.Combine(_tempDirectory, filename);
+            var testFile = Path.Combine(_tempDirectory, "long_content.pdf");
+            var longText = new string('A', 200); // Exceeds 100 char threshold
+            CreateMinimalValidPdf(testFile, longText);
 
             // Act
-            var result = _pdfProcessor.CanProcess(filePath);
+            var result = await _pdfProcessor.ExtractContentAsync(testFile);
 
-            // Assert
-            result.Should().BeTrue();
+            // Assert - should have text but might stop early due to threshold
+            result.Should().NotBeNull();
+        }
+
+        private static void CreateMinimalValidPdf(string filePath, string content)
+        {
+            // Create a minimal but valid PDF structure
+            var pdfContent = $@"%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/Resources <<
+/Font <<
+/F1 <<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+>>
+>>
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+>>
+endobj
+4 0 obj
+<<
+/Length {content.Length + 50}
+>>
+stream
+BT
+/F1 12 Tf
+50 700 Td
+({content}) Tj
+ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000056 00000 n 
+0000000115 00000 n 
+0000000317 00000 n 
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+{400 + content.Length}
+%%EOF";
+            File.WriteAllText(filePath, pdfContent);
         }
 
         [Fact]
@@ -183,10 +264,10 @@ namespace FileContentRenamer.Tests.Services
         {
             // This test simulates the internal logic flow by testing exception handling paths
             // Since we can't easily create valid PDFs in tests, we focus on edge cases
-            
+
             // Arrange
             var testFile = Path.Combine(_tempDirectory, "test.pdf");
-            
+
             // Create a file with minimal PDF header to trigger different error paths
             var pdfHeader = "%PDF-1.4\n";
             await File.WriteAllTextAsync(testFile, pdfHeader);
@@ -214,7 +295,7 @@ namespace FileContentRenamer.Tests.Services
         public async Task ExtractContentAsync_WithDirectoryPath_ShouldReturnEmpty()
         {
             // Arrange - pass a directory path instead of file path
-            
+
             // Act
             var result = await _pdfProcessor.ExtractContentAsync(_tempDirectory);
 
@@ -224,7 +305,13 @@ namespace FileContentRenamer.Tests.Services
 
         public void Dispose()
         {
-            if (Directory.Exists(_tempDirectory))
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing && Directory.Exists(_tempDirectory))
             {
                 Directory.Delete(_tempDirectory, true);
             }

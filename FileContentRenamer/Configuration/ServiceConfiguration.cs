@@ -6,7 +6,7 @@ namespace FileContentRenamer.Configuration
 {
     public static class ServiceConfiguration
     {
-        public static IServiceProvider ConfigureServices(AppConfig config)
+        public static ServiceProvider ConfigureServices(AppConfig config)
         {
             var services = new ServiceCollection();
 

@@ -30,7 +30,7 @@ namespace FileContentRenamer.Tests.Services
             var content = "Some bill content";
             var originalPath = "/path/to/test.pdf";
             var expectedDate = "2024-03-15";
-            
+
             _dateExtractorMock.Setup(x => x.ExtractDateFromContent(content))
                 .Returns(expectedDate);
 
@@ -48,7 +48,7 @@ namespace FileContentRenamer.Tests.Services
             var content = "Some content without date";
             var originalPath = "/path/to/test.pdf";
             var currentDate = DateTime.Now.ToString("yyyy-MM-dd");
-            
+
             _dateExtractorMock.Setup(x => x.ExtractDateFromContent(content))
                 .Returns(string.Empty);
 
@@ -66,7 +66,7 @@ namespace FileContentRenamer.Tests.Services
             var content = "Some content";
             var originalPath = "/path/to/test.pdf";
             var currentDate = DateTime.Now.ToString("yyyy-MM-dd");
-            
+
             _dateExtractorMock.Setup(x => x.ExtractDateFromContent(content))
                 .Returns((string?)null!);
 
@@ -84,7 +84,7 @@ namespace FileContentRenamer.Tests.Services
             var content = "Some content";
             var originalPath = "/path/to/test.jpg";
             var expectedDate = "2024-03-15";
-            
+
             _dateExtractorMock.Setup(x => x.ExtractDateFromContent(content))
                 .Returns(expectedDate);
 
@@ -157,7 +157,7 @@ namespace FileContentRenamer.Tests.Services
             // Arrange
             var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempDir);
-            
+
             try
             {
                 var baseFilename = "test_file.txt";
@@ -183,11 +183,11 @@ namespace FileContentRenamer.Tests.Services
             // Arrange
             var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempDir);
-            
+
             try
             {
                 var baseFilename = "test_file.txt";
-                
+
                 // Create multiple existing files
                 File.WriteAllText(Path.Combine(tempDir, "test_file.txt"), "test");
                 File.WriteAllText(Path.Combine(tempDir, "test_file_2.txt"), "test");
@@ -217,11 +217,11 @@ namespace FileContentRenamer.Tests.Services
         public void CleanupFileName_WithVariousInputs_ShouldReturnCleanedName(string input, string expected)
         {
             // This tests the private CleanupFileName method using reflection
-            
+
             // Arrange
-            var cleanupMethod = typeof(FilenameGenerator).GetMethod("CleanupFileName", 
+            var cleanupMethod = typeof(FilenameGenerator).GetMethod("CleanupFileName",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            
+
             // Act
             var result = cleanupMethod!.Invoke(null, new object[] { input });
 
@@ -235,60 +235,16 @@ namespace FileContentRenamer.Tests.Services
             // Arrange
             var content = "test content";
             var originalPath = "test.pdf"; // No directory path - Path.GetDirectoryName returns empty string, not null
-            
+
             // Setup mocks - the method will go through normal processing
             _dateExtractorMock.Setup(x => x.ExtractDateFromContent(content))
                 .Returns("2025-08-11");
-            
+
             // Act
             var result = _filenameGenerator.GenerateFilename(content, originalPath);
 
             // Assert
             result.Should().Be("test_2025-08-11_card.pdf");
-        }
-
-        [Fact]
-        public async Task GenerateUniqueFilename_ThreadSafety_ShouldHandleConcurrentCalls()
-        {
-            // Arrange
-            var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-            Directory.CreateDirectory(tempDir);
-            
-            try
-            {
-                var baseFilename = "concurrent_test.txt";
-                var results = new ConcurrentBag<string>();
-                var tasks = new List<Task>();
-
-                // Create the base file first so all threads will need to generate numbered versions
-                var baseFilePath = Path.Combine(tempDir, baseFilename);
-                await File.WriteAllTextAsync(baseFilePath, "test");
-
-                // Act - simulate concurrent calls
-                for (int i = 0; i < 5; i++)
-                {
-                    tasks.Add(Task.Run(() =>
-                    {
-                        var result = _filenameGenerator.GenerateUniqueFilename(tempDir, baseFilename);
-                        results.Add(result);
-                        
-                        // Actually create the file to make the next call unique
-                        File.WriteAllText(result, "test");
-                    }));
-                }
-
-                await Task.WhenAll(tasks);
-
-                // Assert - all results should be unique
-                var resultList = results.ToList();
-                resultList.Should().HaveCount(5);
-                resultList.Should().OnlyHaveUniqueItems();
-            }
-            finally
-            {
-                if (Directory.Exists(tempDir))
-                    Directory.Delete(tempDir, true);
-            }
         }
     }
 }

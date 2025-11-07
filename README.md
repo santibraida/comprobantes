@@ -119,6 +119,23 @@ The application uses Serilog for structured logging. Logs are written to:
 
 See [LOGGING.md](LOGGING.md) for more information about the logging system.
 
+## Testing & Code Coverage
+
+The project includes comprehensive unit tests with 223 passing tests.
+
+To run tests with code coverage:
+
+```bash
+./coverage.sh
+```
+
+See [COVERAGE.md](COVERAGE.md) for detailed information about:
+
+- Running coverage analysis
+- Generating HTML reports
+- Understanding coverage metrics
+- CI/CD integration
+
 ## Troubleshooting
 
 If you encounter issues with Leptonica or Tesseract libraries:

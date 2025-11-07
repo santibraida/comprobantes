@@ -10,6 +10,12 @@ x86/
 [Ll]og/
 TestResults/
 
+# Code Coverage
+coverage/
+coverage.*.xml
+*.coverage
+*.coveragexml
+
 # Visual Studio / VS Code files
 .vs/
 .vscode/*

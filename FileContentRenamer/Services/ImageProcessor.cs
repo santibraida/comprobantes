@@ -5,27 +5,36 @@ using Serilog;
 
 namespace FileContentRenamer.Services
 {
-    public class ImageProcessor : IFileProcessor
+    public class ImageProcessor : IFileProcessor, IDisposable
     {
         private readonly AppConfig _config;
+        private readonly string _tempDirectory;
+        private bool _disposed;
 
         public ImageProcessor(AppConfig config)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
+
+            // Create a single temp directory for this processor instance
+            _tempDirectory = Path.Combine(Path.GetTempPath(), "OCR_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_tempDirectory);
+
             VerifyTesseractAvailability();
         }
-        
+
         private void VerifyTesseractAvailability()
         {
             // Check if tessdata directory exists
             if (_config.TesseractDataPath != null && !Directory.Exists(_config.TesseractDataPath))
             {
                 Log.Warning("Tessdata directory does not exist: {TessdataDir}. Creating it now.", _config.TesseractDataPath);
-                try {
+                try
+                {
                     Directory.CreateDirectory(_config.TesseractDataPath);
                     Log.Information("Created tessdata directory at: {TessdataDir}", _config.TesseractDataPath);
-                } 
-                catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     Log.Error(ex, "Failed to create tessdata directory: {ErrorMessage}", ex.Message);
                 }
             }
@@ -33,7 +42,7 @@ namespace FileContentRenamer.Services
             {
                 Log.Information("Tessdata directory found at: {TessdataDir}", _config.TesseractDataPath);
             }
-            
+
             // Check for command-line availability
             try
             {
@@ -46,15 +55,23 @@ namespace FileContentRenamer.Services
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
-                
+
                 using var process = Process.Start(startInfo);
-                string output = process?.StandardOutput.ReadToEndAsync().Result ?? "";
-                process?.WaitForExit();
-                
-                if (process != null && process.ExitCode == 0)
+                if (process != null)
                 {
-                    string tesseractVersion = output.Split('\n').FirstOrDefault() ?? "Unknown version";
-                    Log.Information("Tesseract command-line detected: {TesseractVersion}", tesseractVersion);
+                    // Use synchronous read to avoid .Result on async operation
+                    string output = process.StandardOutput.ReadToEnd();
+                    process.WaitForExit();
+
+                    if (process.ExitCode == 0)
+                    {
+                        string tesseractVersion = output.Split('\n').FirstOrDefault() ?? "Unknown version";
+                        Log.Information("Tesseract command-line detected: {TesseractVersion}", tesseractVersion);
+                    }
+                    else
+                    {
+                        Log.Warning("Tesseract command-line not found. Please install Tesseract OCR.");
+                    }
                 }
                 else
                 {
@@ -71,7 +88,7 @@ namespace FileContentRenamer.Services
         {
             string extension = Path.GetExtension(filePath).ToLowerInvariant();
             bool canProcess = extension == ".jpg" || extension == ".jpeg" || extension == ".png" || extension == ".tif" || extension == ".tiff";
-            
+
             return canProcess;
         }
 
@@ -80,7 +97,7 @@ namespace FileContentRenamer.Services
             try
             {
                 Log.Information("Attempting to extract text from image: {FilePath}", Path.GetFileName(filePath));
-                
+
                 // Check if tesseract data directory exists
                 if (string.IsNullOrEmpty(_config.TesseractDataPath) || !Directory.Exists(_config.TesseractDataPath))
                 {
@@ -88,7 +105,7 @@ namespace FileContentRenamer.Services
                     Log.Error("Tesseract data directory error: {Error}", error);
                     return string.Empty;
                 }
-                
+
                 // Use command-line approach only
                 return await ExtractUsingCommandLineAsync(filePath);
             }
@@ -98,20 +115,18 @@ namespace FileContentRenamer.Services
                 return string.Empty;
             }
         }
-        
+
         private async Task<string> ExtractUsingCommandLineAsync(string filePath)
         {
             Log.Debug("Attempting to extract text using command-line Tesseract");
-            
-            // Create a temporary directory for the output
-            string tempDir = Path.Combine(Path.GetTempPath(), "OCR_" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(tempDir);
-            
+
+            // Use the shared temp directory with unique file name
+            string outputBase = Path.Combine(_tempDirectory, $"ocr_output_{DateTime.Now.Ticks}");
+            string outputTxtFile = $"{outputBase}.txt";
+
             try
             {
-                string outputBase = Path.Combine(tempDir, $"ocr_output_{DateTime.Now.Ticks}");
-                string outputTxtFile = $"{outputBase}.txt";
-                
+
                 // First try running a command to get the available languages
                 var langCheckStartInfo = new ProcessStartInfo
                 {
@@ -122,33 +137,32 @@ namespace FileContentRenamer.Services
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
-                
+
                 try
                 {
                     using var langProcess = Process.Start(langCheckStartInfo);
                     if (langProcess != null)
                     {
-                        var langOutput = new StringBuilder();
-                        langOutput.AppendLine(langProcess.StandardOutput.ReadToEnd());
-                        langOutput.AppendLine(langProcess.StandardError.ReadToEnd());
-                        langProcess.WaitForExit();
+                        await langProcess.StandardOutput.ReadToEndAsync();
+                        await langProcess.StandardError.ReadToEndAsync();
+                        await langProcess.WaitForExitAsync();
                     }
                 }
                 catch (Exception ex)
                 {
                     Log.Error(ex, "Failed to list Tesseract languages");
                 }
-                
+
                 // Prepare language parameter with fallback options
                 string languageParam = _config.TesseractLanguage ?? "eng";
-                
+
                 // If language contains a plus (+), try with just the first language
                 if (languageParam.Contains('+'))
                 {
                     string primaryLang = languageParam.Split('+')[0];
                     languageParam = primaryLang;
                 }
-                
+
                 // Run tesseract command line directly
                 var startInfo = new ProcessStartInfo
                 {
@@ -159,24 +173,24 @@ namespace FileContentRenamer.Services
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
-                
+
                 // Run the process
                 using (var process = Process.Start(startInfo))
                 {
                     if (process != null)
                     {
-                        var output = await process.StandardOutput.ReadToEndAsync();
+                        await process.StandardOutput.ReadToEndAsync();
                         var error = await process.StandardError.ReadToEndAsync();
-                        
+
                         await process.WaitForExitAsync();
-                        
+
                         if (process.ExitCode != 0)
                         {
-                            Log.Error("Tesseract process failed with exit code {ExitCode}: {Error}", 
+                            Log.Error("Tesseract process failed with exit code {ExitCode}: {Error}",
                                 process.ExitCode, error);
                             return string.Empty;
                         }
-                        
+
                         // Read the output file
                         if (File.Exists(outputTxtFile))
                         {
@@ -203,19 +217,50 @@ namespace FileContentRenamer.Services
             }
             finally
             {
-                // Clean up temporary files
+                // Clean up temporary files for this extraction
                 try
                 {
-                    if (Directory.Exists(tempDir))
+                    if (File.Exists(outputTxtFile))
                     {
-                        Directory.Delete(tempDir, true);
+                        File.Delete(outputTxtFile);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning(ex, "Failed to clean up temporary directory: {TempDir}", tempDir);
+                    Log.Warning(ex, "Failed to clean up temporary file");
                 }
             }
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    // Dispose managed resources
+                    try
+                    {
+                        if (Directory.Exists(_tempDirectory))
+                        {
+                            Directory.Delete(_tempDirectory, true);
+                            Log.Debug("Cleaned up temp directory: {TempDir}", _tempDirectory);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "Failed to clean up temp directory during disposal: {TempDir}", _tempDirectory);
+                    }
+                }
+
+                _disposed = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
     }
 }

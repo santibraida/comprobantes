@@ -79,7 +79,7 @@ namespace FileContentRenamer.Tests.Services
         {
             // Arrange
             var testFile = Path.Combine(_tempDirectory, "test.pdf");
-            File.WriteAllText(testFile, "test content");
+            await File.WriteAllTextAsync(testFile, "test content");
 
             _fileValidatorMock.Setup(x => x.ValidateConfiguration()).Returns(true);
             _fileValidatorMock.Setup(x => x.ShouldProcessFile(testFile)).Returns(true);
@@ -113,7 +113,7 @@ namespace FileContentRenamer.Tests.Services
         {
             // Arrange
             var testFile = Path.Combine(_tempDirectory, "service_2024-03-15_payment.pdf");
-            File.WriteAllText(testFile, "test content");
+            await File.WriteAllTextAsync(testFile, "test content");
 
             _fileValidatorMock.Setup(x => x.ValidateConfiguration()).Returns(true);
             _fileValidatorMock.Setup(x => x.ShouldProcessFile(testFile)).Returns(true);
@@ -138,7 +138,7 @@ namespace FileContentRenamer.Tests.Services
         {
             // Arrange
             var testFile = Path.Combine(_tempDirectory, "test.unknown");
-            File.WriteAllText(testFile, "test content");
+            await File.WriteAllTextAsync(testFile, "test content");
 
             _appConfig.FileExtensions = new List<string> { ".unknown" };
 
@@ -161,7 +161,7 @@ namespace FileContentRenamer.Tests.Services
         {
             // Arrange
             var testFile = Path.Combine(_tempDirectory, "test.pdf");
-            File.WriteAllText(testFile, "test content");
+            await File.WriteAllTextAsync(testFile, "test content");
 
             _fileValidatorMock.Setup(x => x.ValidateConfiguration()).Returns(true);
             _fileValidatorMock.Setup(x => x.ShouldProcessFile(testFile)).Returns(true);
@@ -183,7 +183,7 @@ namespace FileContentRenamer.Tests.Services
         {
             // Arrange
             var testFile = Path.Combine(_tempDirectory, "test.pdf");
-            File.WriteAllText(testFile, "test content");
+            await File.WriteAllTextAsync(testFile, "test content");
 
             _fileValidatorMock.Setup(x => x.ValidateConfiguration()).Returns(true);
             _fileValidatorMock.Setup(x => x.ShouldProcessFile(testFile)).Returns(true);
@@ -215,12 +215,12 @@ namespace FileContentRenamer.Tests.Services
             // Arrange
             var subDir = Path.Combine(_tempDirectory, "subdir");
             Directory.CreateDirectory(subDir);
-            
+
             var testFile1 = Path.Combine(_tempDirectory, "test1.pdf");
             var testFile2 = Path.Combine(subDir, "test2.pdf");
-            
-            File.WriteAllText(testFile1, "test content 1");
-            File.WriteAllText(testFile2, "test content 2");
+
+            await File.WriteAllTextAsync(testFile1, "test content 1");
+            await File.WriteAllTextAsync(testFile2, "test content 2");
 
             _appConfig.IncludeSubdirectories = true;
 
@@ -257,7 +257,7 @@ namespace FileContentRenamer.Tests.Services
 
             foreach (var file in testFiles)
             {
-                File.WriteAllText(file, "test content");
+                await File.WriteAllTextAsync(file, "test content");
             }
 
             _fileValidatorMock.Setup(x => x.ValidateConfiguration()).Returns(true);
@@ -284,9 +284,9 @@ namespace FileContentRenamer.Tests.Services
             // Arrange
             var testFile1 = Path.Combine(_tempDirectory, "test1.pdf");
             var testFile2 = Path.Combine(_tempDirectory, "test2.pdf");
-            
-            File.WriteAllText(testFile1, "test content 1");
-            File.WriteAllText(testFile2, "test content 2");
+
+            await File.WriteAllTextAsync(testFile1, "test content 1");
+            await File.WriteAllTextAsync(testFile2, "test content 2");
 
             _fileValidatorMock.Setup(x => x.ValidateConfiguration()).Returns(true);
             _fileValidatorMock.Setup(x => x.ShouldProcessFile(It.IsAny<string>())).Returns(true);
@@ -306,7 +306,13 @@ namespace FileContentRenamer.Tests.Services
 
         public void Dispose()
         {
-            if (Directory.Exists(_tempDirectory))
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing && Directory.Exists(_tempDirectory))
             {
                 Directory.Delete(_tempDirectory, true);
             }

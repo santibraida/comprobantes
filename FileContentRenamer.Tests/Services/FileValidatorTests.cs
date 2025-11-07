@@ -129,7 +129,7 @@ namespace FileContentRenamer.Tests.Services
         {
             // Arrange
             var testFile = Path.Combine(_tempDirectory, "service_2024-03-15_payment.pdf");
-            
+
             _filenameGeneratorMock.Setup(x => x.IsAlreadyNamedFilename("service_2024-03-15_payment"))
                 .Returns(true);
 
@@ -145,7 +145,7 @@ namespace FileContentRenamer.Tests.Services
         {
             // Arrange
             var testFile = Path.Combine(_tempDirectory, "random_filename.pdf");
-            
+
             _filenameGeneratorMock.Setup(x => x.IsAlreadyNamedFilename("random_filename"))
                 .Returns(false);
 
@@ -338,7 +338,13 @@ namespace FileContentRenamer.Tests.Services
 
         public void Dispose()
         {
-            if (Directory.Exists(_tempDirectory))
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing && Directory.Exists(_tempDirectory))
             {
                 Directory.Delete(_tempDirectory, true);
             }

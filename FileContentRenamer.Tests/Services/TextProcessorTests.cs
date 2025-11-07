@@ -174,7 +174,7 @@ namespace FileContentRenamer.Tests.Services
             await File.WriteAllTextAsync(testFile, "test content");
 
             using var fileStream = File.Open(testFile, FileMode.Open, FileAccess.Read, FileShare.None);
-            
+
             // Act
             var result = await _textProcessor.ExtractContentAsync(testFile);
 
@@ -214,7 +214,13 @@ namespace FileContentRenamer.Tests.Services
 
         public void Dispose()
         {
-            if (Directory.Exists(_tempDirectory))
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing && Directory.Exists(_tempDirectory))
             {
                 Directory.Delete(_tempDirectory, true);
             }

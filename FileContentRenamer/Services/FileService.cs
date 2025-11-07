@@ -14,7 +14,7 @@ namespace FileContentRenamer.Services
         private readonly IFileValidator _fileValidator;
 
         public FileService(
-            AppConfig config, 
+            AppConfig config,
             List<IFileProcessor> processors,
             IDateExtractor dateExtractor,
             IDirectoryOrganizer directoryOrganizer,
@@ -35,21 +35,19 @@ namespace FileContentRenamer.Services
             {
                 return;
             }
-            
-            Log.Information("Starting to process files in {BasePath}", _config.BasePath);
-            
+
             // Start timing the file processing
             var stopwatch = Stopwatch.StartNew();
-            
+
             // Get all files with the specified extensions
             var searchOption = _config.IncludeSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-            
+
             var files = _config.FileExtensions!
                 .SelectMany(ext => Directory.GetFiles(_config.BasePath!, $"*{ext}", searchOption))
                 .Where(_fileValidator.ShouldProcessFile)
                 .ToList();
 
-            Log.Information("Found {FileCount} files to process", files.Count);
+            Log.Information("Starting to process {FileCount} files in {BasePath} with parallelism degree: {MaxDegreeOfParallelism}", files.Count, _config.BasePath, _config.MaxDegreeOfParallelism);
 
             int processedCount = 0;
             var processedCountLock = new object();
@@ -60,24 +58,24 @@ namespace FileContentRenamer.Services
                 MaxDegreeOfParallelism = _config.MaxDegreeOfParallelism
             };
 
-            Log.Information("Processing files with parallelism degree: {MaxDegreeOfParallelism}", _config.MaxDegreeOfParallelism);
+            Log.Debug("Processing files with parallelism degree: {MaxDegreeOfParallelism}", _config.MaxDegreeOfParallelism);
 
             await Parallel.ForEachAsync(files, parallelOptions, async (filePath, cancellationToken) =>
             {
                 await ProcessFileAsync(filePath);
-                
+
                 lock (processedCountLock)
                 {
                     processedCount++;
                     if (processedCount % 10 == 0)
                     {
-                        Log.Information("Processed {ProcessedCount}/{TotalCount} files", processedCount, files.Count);
+                        Log.Debug("Processed {ProcessedCount}/{TotalCount} files", processedCount, files.Count);
                     }
                 }
             });
-            
+
             stopwatch.Stop();
-            Log.Information("Finished processing {FileCount} files in {ElapsedTime}ms ({ElapsedSeconds:F2} seconds)", 
+            Log.Information("Finished processing {FileCount} files in {ElapsedTime}ms ({ElapsedSeconds:F2} seconds)",
                 files.Count, stopwatch.ElapsedMilliseconds, stopwatch.ElapsedMilliseconds / 1000.0);
         }
 
@@ -88,7 +86,7 @@ namespace FileContentRenamer.Services
             {
                 var fileName = Path.GetFileName(filePath);
                 Log.Information("Processing file: {FileName}", fileName);
-                
+
                 _fileValidator.ValidateFileSize(filePath);
 
                 string? directory = Path.GetDirectoryName(filePath);
@@ -99,7 +97,7 @@ namespace FileContentRenamer.Services
                 }
 
                 string baseName = Path.GetFileNameWithoutExtension(fileName);
-                
+
                 // Check if file should be skipped due to already being named
                 if (_fileValidator.ShouldSkipAlreadyNamedFile(filePath))
                 {
@@ -108,7 +106,7 @@ namespace FileContentRenamer.Services
                     // Extract date and organize into year/month folder
                     string dateStr = _dateExtractor.ExtractDateFromFilename(baseName);
                     string newPath = _directoryOrganizer.OrganizeFileIntoDirectoryStructure(filePath, dateStr);
-                    
+
                     if (newPath != filePath)
                     {
                         Log.Information("Moved already-named file to organized structure: {FileName}", fileName);
@@ -134,25 +132,25 @@ namespace FileContentRenamer.Services
 
                 // Generate new filename
                 string newFilename = _filenameGenerator.GenerateFilename(content, filePath);
-                
+
                 // Check if rename is needed
                 if (string.Equals(fileName, newFilename, StringComparison.OrdinalIgnoreCase))
                 {
                     Log.Information("File already has an appropriate name: {FileName}", fileName);
-                    
+
                     // Still organize into year/month folder structure
                     string dateStr = _dateExtractor.ExtractDateFromContent(content);
-                    string organizedPath = _directoryOrganizer.OrganizeFileIntoDirectoryStructure(filePath, dateStr);
+                    _directoryOrganizer.OrganizeFileIntoDirectoryStructure(filePath, dateStr);
                     return;
                 }
 
                 // Generate unique filename if needed
                 string targetPath = _filenameGenerator.GenerateUniqueFilename(directory, newFilename);
-                
+
                 // Rename the file
                 File.Move(filePath, targetPath);
                 Log.Information("Renaming: {OldName} -> {NewName}", fileName, Path.GetFileName(targetPath));
-                
+
                 // Organize renamed file into directory structure
                 string finalDateStr = _dateExtractor.ExtractDateFromContent(content);
                 _directoryOrganizer.OrganizeFileIntoDirectoryStructure(targetPath, finalDateStr);
@@ -164,7 +162,7 @@ namespace FileContentRenamer.Services
             finally
             {
                 fileStopwatch.Stop();
-                Log.Debug("Completed processing file: {FileName} in {ElapsedTime}ms", 
+                Log.Debug("Completed processing file: {FileName} in {ElapsedTime}ms",
                     Path.GetFileName(filePath), fileStopwatch.ElapsedMilliseconds);
             }
         }

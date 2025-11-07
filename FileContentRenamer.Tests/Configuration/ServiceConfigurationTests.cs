@@ -81,7 +81,13 @@ namespace FileContentRenamer.Tests.Configuration
 
         public void Dispose()
         {
-            if (Directory.Exists(_tempDirectory))
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing && Directory.Exists(_tempDirectory))
             {
                 Directory.Delete(_tempDirectory, true);
             }

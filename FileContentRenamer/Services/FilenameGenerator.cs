@@ -4,11 +4,15 @@ using Serilog;
 
 namespace FileContentRenamer.Services
 {
-    public class FilenameGenerator : IFilenameGenerator
+    public partial class FilenameGenerator : IFilenameGenerator
     {
         private readonly IDateExtractor _dateExtractor;
         private readonly AppConfig _config;
-        private static readonly object _filenameLock = new object();
+        private static readonly object _filenameLock = new();
+
+        // Compiled regex patterns for better performance
+        private static readonly Regex FilenameValidationRegex = new(@"^[a-zA-Z0-9_]+_\d{4}-\d{2}-\d{2}_[a-zA-Z0-9_]+$", RegexOptions.Compiled);
+        private static readonly Regex MultipleUnderscoresRegex = new(@"_{2,}", RegexOptions.Compiled);
 
         public FilenameGenerator(IDateExtractor dateExtractor, AppConfig config)
         {
@@ -26,7 +30,7 @@ namespace FileContentRenamer.Services
             }
 
             string fileExtension = Path.GetExtension(originalPath);
-            
+
             // Extract date from content
             string date = _dateExtractor.ExtractDateFromContent(content);
             if (string.IsNullOrEmpty(date))
@@ -37,17 +41,17 @@ namespace FileContentRenamer.Services
 
             // Generate filename using naming rules
             string generatedName = _config.NamingRules.GenerateFilename(content, date);
-            
+
             // Clean up the filename
             generatedName = CleanupFileName(generatedName);
-            
+
             return $"{generatedName}{fileExtension}";
         }
 
         public bool IsAlreadyNamedFilename(string filenameWithoutExtension)
         {
             // Check if filename follows the pattern: service_yyyy-MM-dd_payment
-            return Regex.IsMatch(filenameWithoutExtension, @"^[a-zA-Z0-9_]+_\d{4}-\d{2}-\d{2}_[a-zA-Z0-9_]+$");
+            return FilenameValidationRegex.IsMatch(filenameWithoutExtension);
         }
 
         public string GenerateUniqueFilename(string directory, string baseFilename)
@@ -56,35 +60,37 @@ namespace FileContentRenamer.Services
             lock (_filenameLock)
             {
                 string targetPath = Path.Combine(directory, baseFilename);
-                
+
                 if (!File.Exists(targetPath))
                     return targetPath;
 
                 string filenameWithoutExtension = Path.GetFileNameWithoutExtension(baseFilename);
                 string extension = Path.GetExtension(baseFilename);
 
+                // Pre-compile the regex pattern for this filename
+                var numberingRegex = new Regex(@"^" + Regex.Escape(filenameWithoutExtension) + @"_(\d+)$", RegexOptions.Compiled);
+
                 // Check for existing numbered versions
                 var existingFiles = Directory.GetFiles(directory, $"{filenameWithoutExtension}*{extension}")
                     .Select(Path.GetFileNameWithoutExtension)
                     .ToList();
 
-                // Find the highest number
-                int highestNumber = 1;
-                foreach (var existingFile in existingFiles)
-                {
-                    if (existingFile != null)
+                // Find the highest number among numbered files
+                int highestNumber = existingFiles
+                    .Where(existingFile => existingFile != null)
+                    .Select(existingFile =>
                     {
-                        var match = Regex.Match(existingFile, @"^" + Regex.Escape(filenameWithoutExtension) + @"_(\d+)$");
-                        if (match.Success && int.TryParse(match.Groups[1].Value, out int number))
-                        {
-                            highestNumber = Math.Max(highestNumber, number);
-                        }
-                    }
-                }
+                        var match = numberingRegex.Match(existingFile!);
+                        return match.Success && int.TryParse(match.Groups[1].Value, out int number) ? number : 0;
+                    })
+                    .DefaultIfEmpty(0)
+                    .Max();
 
-                // Generate next available filename
-                int nextNumber = highestNumber + 1;
+                // If base file exists but no numbered versions, start at 2
+                // Otherwise, increment the highest number found
+                int nextNumber = highestNumber == 0 ? 2 : highestNumber + 1;
                 string newFilename = $"{filenameWithoutExtension}_{nextNumber}{extension}";
+
                 return Path.Combine(directory, newFilename);
             }
         }
@@ -102,11 +108,11 @@ namespace FileContentRenamer.Services
             }
 
             // Replace multiple underscores with single underscore
-            filename = Regex.Replace(filename, @"_{2,}", "_");
-            
+            filename = MultipleUnderscoresRegex.Replace(filename, "_");
+
             // Remove leading/trailing underscores
             filename = filename.Trim('_');
-            
+
             // Ensure it's not empty
             if (string.IsNullOrEmpty(filename))
                 filename = "cleaned_file";

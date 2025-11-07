@@ -16,7 +16,7 @@
       }
     },
     {
-      "label": "build and run",
+      "label": "run",
       "command": "dotnet",
       "type": "shell",
       "args": [
@@ -25,8 +25,23 @@
         "${workspaceFolder}/FileContentRenamer/FileContentRenamer.csproj"
       ],
       "problemMatcher": ["$msCompile"],
-      "group": "test",
-      "isBackground": false
+      "dependsOn": []
+    },
+    {
+      "label": "test with coverage",
+      "command": "./coverage.sh",
+      "type": "shell",
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
     }
   ]
 }
