@@ -4,7 +4,7 @@ using Serilog;
 
 namespace FileContentRenamer.Models
 {
-    public class AppConfig
+    public class AppConfig : IAppConfig
     {
         private const string AppSettingsFileName = "appsettings.json";
         private static IConfigurationFileProvider _fileProvider = new ConfigurationFileProvider();

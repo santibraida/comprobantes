@@ -3,7 +3,7 @@ using Serilog;
 
 namespace FileContentRenamer.Models
 {
-    public class NamingRule
+    public class NamingRule : INamingRule
     {
         private List<string>? _lowerKeywords;
 
@@ -87,9 +87,30 @@ namespace FileContentRenamer.Models
 
             return allKeywordsMatch;
         }
+
+        /// <summary>
+        /// Validates that the rule is properly configured
+        /// </summary>
+        /// <returns>True if the rule is valid, false otherwise</returns>
+        public bool IsValid()
+        {
+            if (string.IsNullOrWhiteSpace(Name))
+                return false;
+
+            if (Keywords == null || Keywords.Count == 0)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(ServiceName))
+                return false;
+
+            // PaymentMethod is optional (can use default)
+            // DateOverride is optional
+
+            return true;
+        }
     }
 
-    public class NamingRules
+    public class NamingRules : INamingRules
     {
         /// <summary>
         /// Collection of all naming rules

@@ -10,8 +10,9 @@ namespace FileContentRenamer.Configuration
         {
             var services = new ServiceCollection();
 
-            // Register configuration
-            services.AddSingleton(config);
+            // Register configuration with interface
+            services.AddSingleton<IAppConfig>(config);
+            services.AddSingleton(config); // Keep concrete type registration for backward compatibility
 
             // Register interfaces and their implementations
             services.AddTransient<IDateExtractor, DateExtractor>();
